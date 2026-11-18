@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="{{ current_language }}" dir="{{ language_dir }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NET BOOK — {{ t('login_title') }}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f0f2f5;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px}
+.card{background:white;width:100%;max-width:430px;padding:28px;border-radius:16px;box-shadow:0 4px 20px #0001}
+h1{text-align:center;color:#1877f2;margin:0 0 8px}
+.sub{text-align:center;color:#65676b;margin-bottom:24px}
+input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:9px;font-size:16px}
+button{width:100%;padding:14px;background:#1877f2;color:white;border:0;border-radius:9px;font-size:17px;font-weight:bold;margin-top:12px;cursor:pointer}
+a{color:#1877f2;text-decoration:none}
+.bottom{text-align:center;margin-top:20px}
+.message{background:#e7f3ff;padding:10px;border-radius:8px;margin:8px 0}
+.language{text-align:center;margin-bottom:20px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="language">🌐 <a href="{{ url_for('language_settings') }}">{{ t('language') }}</a></div>
+<h1>NET BOOK</h1>
+<p class="sub">{{ t('login_subtitle') }}</p>
+{% with messages = get_flashed_messages() %}
+{% for message in messages %}<div class="message">{{ message }}</div>{% endfor %}
+{% endwith %}
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input name="identity" placeholder="{{ t('identity_placeholder') }}" required>
+<input type="password" name="password" placeholder="{{ t('password_placeholder') }}" required>
+<button type="submit">{{ t('login_button') }}</button>
+</form>
+<div class="bottom">{{ t('no_account') }} <a href="{{ url_for('register') }}">{{ t('create_account') }}</a></div>
+</div>
+</body>
+</html>

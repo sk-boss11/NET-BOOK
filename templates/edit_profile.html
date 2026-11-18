@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit Profile Details - NET BOOK</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f0f2f5;color:#202124;font-family:Arial,"Noto Sans Bengali",sans-serif}
+header{height:60px;background:white;display:flex;align-items:center;justify-content:space-between;padding:0 5%;box-shadow:0 1px 5px #ddd}
+.brand{font-size:23px;font-weight:800;color:#1877f2;text-decoration:none}
+.back{color:#1877f2;text-decoration:none;font-weight:bold}
+.wrap{max-width:620px;margin:28px auto;padding:0 14px}
+.card{background:white;padding:22px;border-radius:14px;box-shadow:0 1px 4px #ddd;margin-bottom:15px}
+h2{font-size:21px;margin:0 0 8px}
+.sub{color:#777;font-size:14px;margin-bottom:22px}
+.item{padding:17px 0;border-bottom:1px solid #eee}
+.item:last-child{border:0}
+label{display:block;font-weight:bold;margin-bottom:9px}
+input,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:9px;font:inherit}
+textarea{min-height:90px;resize:vertical}
+button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white;padding:11px 20px;font-weight:bold;font-size:14px}
+.flash{padding:12px 15px;border-radius:9px;margin-bottom:12px;background:#e8f5e9;color:#176b2c;font-size:14px}
+.flash.error{background:#ffebee;color:#b42318}
+.current{font-size:13px;color:#777;margin-top:6px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+<a class="brand" href="/">NET BOOK</a>
+<a class="back" href="/profile">← Profile</a>
+</header>
+<main class="wrap">
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="flash {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+<section class="card">
+<h2>✏️ Edit Profile Details</h2>
+<div class="sub">প্রতিটি তথ্য আলাদাভাবে পরিবর্তন করতে পারবেন।</div>
+
+<div class="item">
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="field" value="location">
+<label for="location">📍 Location</label>
+<input id="location" name="location" maxlength="150" value="{{ profile_user.location or '' }}" placeholder="আপনার শহর বা এলাকা">
+<button type="submit">Save Location</button>
+</form>
+</div>
+
+<div class="item">
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="field" value="university">
+<label for="university">🎓 University</label>
+<input id="university" name="university" maxlength="200" value="{{ profile_user.university or '' }}" placeholder="আপনার বিশ্ববিদ্যালয়ের নাম">
+<button type="submit">Save University</button>
+</form>
+</div>
+
+<div class="item">
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="field" value="bio">
+<label for="bio">📝 Bio</label>
+<textarea id="bio" name="bio" maxlength="500" placeholder="নিজের সম্পর্কে কিছু লিখুন">{{ profile_user.bio or '' }}</textarea>
+<button type="submit">Save Bio</button>
+</form>
+</div>
+
+<div class="item">
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="field" value="website">
+<label for="website">🔗 Website</label>
+<input id="website" name="website" type="url" maxlength="255" value="{{ profile_user.website or '' }}" placeholder="https://example.com">
+<button type="submit">Save Website</button>
+</form>
+</div>
+</section>
+</main>
+</body>
+</html>

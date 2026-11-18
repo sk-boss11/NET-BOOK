@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="{{ current_language }}" dir="{{ language_dir }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1877f2">
+    <title>{{ t('language') }} | NET BOOK</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 25px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #eaf2ff, #f0f2f5, #eeeaff);
+            font-family: Arial, "Noto Sans Bengali", sans-serif;
+            color: #202124;
+        }
+        .container {
+            width: 100%;
+            max-width: 490px;
+            padding: 30px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 12px 40px #183b7018;
+        }
+        .icon {
+            width: 64px;
+            height: 64px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 18px;
+            border-radius: 18px;
+            background: #eaf2ff;
+            font-size: 32px;
+        }
+        h2 { margin: 0 0 10px; color: #1877f2; font-size: 25px; }
+        p { color: #65676b; line-height: 1.7; font-size: 14px; }
+        .field-label {
+            display: block;
+            margin-top: 25px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        select, button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 12px;
+            border-radius: 11px;
+            font-size: 16px;
+        }
+        select {
+            border: 1px solid #ccd0d5;
+            background: #fff;
+            color: #202124;
+            outline-color: #1877f2;
+        }
+        button {
+            border: 0;
+            background: linear-gradient(100deg, #1877f2, #5269e8);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 5px 13px #1877f233;
+        }
+        button:active { transform: scale(.99); }
+        .back {
+            display: block;
+            margin-top: 22px;
+            color: #1877f2;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .message {
+            padding: 12px;
+            background: #e7f3ff;
+            color: #185abc;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .brand {
+            margin-top: 25px;
+            color: #9299a3;
+            text-align: center;
+            font-size: 12px;
+        }
+        @media(max-width: 480px) {
+            body { padding: 15px; }
+            .container { padding: 23px 19px; border-radius: 16px; }
+            h2 { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="icon">🌐</div>
+        <h2>{{ t('language') }}</h2>
+        <p>{{ t('choose_language') }}</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <label class="field-label" for="language">{{ t('language') }}</label>
+            <select name="language" id="language" required>
+                {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {% if code == current_language %}selected{% endif %}>
+                        {{ name }}{% if code == current_language %} ✓{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <button type="submit">✓ {{ t('save') }}</button>
+        </form>
+
+        <a class="back" href="{{ url_for('home') }}">← {{ t('back') }}</a>
+        <div class="brand">NET BOOK · Your Social World</div>
+    </main>
+</body>
+</html>

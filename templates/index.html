@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="{{ current_language }}" dir="{{ language_dir }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1877f2">
+<title>{{ h("page_title") }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--blue:#1877f2;--bg:#f0f2f5;--white:#fff;--text:#202124;--muted:#777;--line:#e8e8e8}
+body{font-family:Arial,"Noto Sans Bengali",sans-serif;background:var(--bg);color:var(--text)}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;border:0;font:inherit}
+.topbar{height:66px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 4%;position:sticky;top:0;z-index:20;box-shadow:0 1px 5px #ddd;gap:18px}
+.brand{font-size:27px;font-weight:800;color:var(--blue);white-space:nowrap}
+.search{width:min(340px,32vw);padding:12px 18px;border:0;border-radius:25px;background:var(--bg);outline:none;font-size:14px}
+.top-actions{display:flex;align-items:center;gap:12px}
+.circle{width:42px;height:42px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-size:19px}
+.user-name{font-size:13px;font-weight:bold;color:var(--blue)}
+.logout{background:var(--blue);color:white;padding:9px 15px;border-radius:20px;font-size:13px}
+
+.menu-wrap{position:relative}
+.menu-toggle{background:#1877f2;color:#fff;padding:10px 17px;border-radius:22px;font-weight:700;font-size:14px}
+.menu-dropdown{display:none;position:absolute;right:0;top:calc(100% + 10px);width:225px;background:#fff;border-radius:12px;box-shadow:0 5px 22px #0002;padding:9px;z-index:100}
+.menu-dropdown.open{display:block}
+.menu-dropdown a,.menu-dropdown button{display:flex;width:100%;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;background:#fff;color:#202124;text-decoration:none;font-size:14px;text-align:left}
+.menu-dropdown a:hover,.menu-dropdown button:hover{background:#f0f2f5}
+.menu-dropdown form{margin:0}
+.menu-dropdown .menu-logout{color:#d93025}
+@media(max-width:700px){.menu-toggle{padding:9px 12px;font-size:12px}.menu-dropdown{right:0;width:210px}}
+
+.layout{max-width:1400px;margin:22px auto;padding:0 18px;display:grid;grid-template-columns:250px minmax(0,650px) 270px;gap:22px;align-items:start}
+.sidebar,.rightbar{position:sticky;top:84px}
+.panel,.card{background:#fff;border-radius:13px;padding:17px;margin-bottom:16px;box-shadow:0 1px 3px #ddd}
+.profile-mini{display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#1877f2,#7658e8);display:grid;place-items:center;color:white;font-weight:bold;font-size:18px;flex-shrink:0}
+.profile-mini small,.muted{color:var(--muted);font-size:12px}
+.menu a{display:flex;align-items:center;gap:13px;padding:12px 10px;border-radius:9px;font-size:14px;font-weight:600}
+.menu a:hover,.menu a.active{background:#eaf2ff;color:var(--blue)}
+.menu-icon{font-size:20px;width:25px;text-align:center}
+.section-title{font-size:17px;margin-bottom:14px}
+.welcome{background:linear-gradient(120deg,#1877f2,#6658d9);color:#fff;padding:23px;border-radius:15px;margin-bottom:16px}
+.welcome h2{font-size:22px;margin-bottom:8px}
+.welcome p{font-size:14px;line-height:1.7;opacity:.95}
+.stories{display:flex;gap:12px;overflow-x:auto;padding-bottom:5px}
+.story{min-width:100px;height:145px;border-radius:13px;background:linear-gradient(160deg,#1877f2,#9b64e8);color:white;display:flex;flex-direction:column;justify-content:space-between;padding:10px;font-size:12px;font-weight:bold}
+.story .avatar{border:2px solid white;width:38px;height:38px}
+.story.add{background:linear-gradient(160deg,#f2f5ff,#dce8ff);color:var(--blue)}
+.composer{display:flex;align-items:center;gap:12px}
+.composer-input{background:var(--bg);border-radius:25px;padding:14px 17px;flex:1;color:#777;font-size:14px}
+.composer-actions{display:flex;justify-content:space-around;border-top:1px solid var(--line);margin-top:15px;padding-top:13px;gap:8px;flex-wrap:wrap}
+.action{font-size:13px;color:#555;padding:8px;border-radius:8px}
+.action:hover{background:var(--bg)}
+.post-head{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.post-head small{color:var(--muted);font-size:12px}
+.post-content{font-size:14px;line-height:1.8;margin:12px 0}
+.post-placeholder{height:190px;border-radius:10px;background:linear-gradient(135deg,#e8f1ff,#eee9ff);display:grid;place-items:center;color:#667;font-size:14px;margin:12px 0}
+.post-actions{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding-top:12px;color:#666;font-size:13px}
+.suggestion{display:flex;align-items:center;gap:10px;margin:14px 0}
+.suggestion-info{flex:1;font-size:13px}
+.suggestion-info small{display:block;color:var(--muted);margin-top:4px}
+.badge{font-size:11px;color:var(--blue);background:#eaf2ff;padding:5px 8px;border-radius:15px}
+.notice{font-size:13px;line-height:1.7;color:#666}
+footer{text-align:center;color:#888;padding:20px;font-size:12px}
+.mobile-nav{display:none}
+@media(max-width:1050px){.layout{grid-template-columns:210px minmax(0,1fr)}.rightbar{display:none}}
+@media(max-width:700px){
+.topbar{height:58px;padding:0 12px;gap:8px}
+.brand{font-size:21px}.search{width:34vw;padding:10px;font-size:12px}
+.top-actions{gap:6px}.circle{width:36px;height:36px;font-size:16px}
+.user-name{display:none}.logout{padding:8px 10px;font-size:11px}
+.layout{display:block;margin:13px auto;padding:0 10px}
+.sidebar,.rightbar{display:none}
+.welcome{padding:19px}.welcome h2{font-size:19px}
+.card,.panel{padding:14px;margin-bottom:12px}
+.story{min-width:88px;height:128px}
+.mobile-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;display:flex;justify-content:space-around;padding:10px 3px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -2px 8px #ddd;z-index:30}
+.mobile-nav a{font-size:19px;text-align:center;color:#555}
+.mobile-nav small{display:block;font-size:9px;margin-top:3px}
+footer{padding-bottom:85px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+<a class="brand" href="/">NET BOOK</a>
+<input class="search" type="search" placeholder="🔎 {{ t('search') }}">
+<div class="top-actions">
+<a class="circle" href="{{ url_for('language_settings') }}" title="{{ t('language') }}" aria-label="{{ t('language') }}">🌐</a>
+<a class="circle" href="#messages" title="{{ t('messenger') }}">💬</a>
+<a class="circle" href="#notifications" title="{{ t('notifications') }}">🔔</a>
+<div class="menu-wrap">
+<button class="menu-toggle" type="button" id="menuToggle" aria-expanded="false" aria-controls="mainMenu">☰ {{ t('menu') }}</button>
+<div class="menu-dropdown" id="mainMenu">
+<a href="/">🏠 {{ t('home') }}</a>
+<a href="/profile">👤 {{ t('profile') }}</a>
+<a href="#friends">👥 {{ t('friends') }}</a>
+<a href="#videos">🎬 {{ t('videos') }}</a>
+<a href="#stories">📖 {{ t('stories') }}</a>
+<a href="#groups">🌐 {{ t('groups') }}</a>
+<a href="#messages">💬 {{ t('messenger') }}</a>
+<a href="#notifications">🔔 {{ t('notifications') }}</a>
+<a href="{{ url_for('language_settings') }}">🌐 {{ t('language') }}</a>
+{% if current_user.is_authenticated %}
+<form method="POST" action="{{ url_for('logout') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="menu-logout" type="submit">🚪 {{ t('logout') }}</button>
+</form>
+{% else %}
+<a href="{{ url_for('login') }}">🔐 {{ t('login') }}</a>
+<a href="{{ url_for('register') }}">📝 {{ t('register') }}</a>
+{% endif %}
+</div>
+</div>
+</div>
+</header>
+
+<div class="layout">
+<aside class="sidebar">
+<div class="panel">
+<div class="profile-mini">
+<div class="avatar">{% if current_user.is_authenticated %}{{ current_user.full_name[:1] }}{% else %}N{% endif %}</div>
+<div>
+<strong>{% if current_user.is_authenticated %}{{ current_user.full_name }}{% else %}NET BOOK User{% endif %}</strong>
+<small>{% if current_user.is_authenticated %}@{{ current_user.username }}{% else %}{{ h('guest_world') }}{% endif %}</small>
+</div>
+</div>
+<nav class="menu">
+<a class="active" href="/"><span class="menu-icon">🏠</span> {{ t('home') }}</a>
+<a href="/profile"><span class="menu-icon">👤</span> {{ t('profile') }}</a>
+<a href="#friends"><span class="menu-icon">👥</span> {{ t('friends') }}</a>
+<a href="#videos"><span class="menu-icon">🎬</span> {{ t('videos') }}</a>
+<a href="#stories"><span class="menu-icon">📖</span> {{ t('stories') }}</a>
+<a href="#groups"><span class="menu-icon">🌐</span> {{ t('groups') }}</a>
+<a href="#messages"><span class="menu-icon">💬</span> {{ t('messenger') }}</a>
+<a href="#notifications"><span class="menu-icon">🔔</span> {{ t('notifications') }}</a>
+<a href="#settings"><span class="menu-icon">⚙️</span> {{ t('settings') }}</a>
+</nav>
+</div>
+<div class="panel notice">
+<strong>🌍 NET BOOK</strong>
+<p>{{ h("sidebar_intro") }}</p>
+</div>
+</aside>
+
+<main>
+<section class="welcome">
+{% if current_user.is_authenticated %}
+<h2>{{ h('welcome_user').format(name=current_user.full_name) }}</h2>
+<p>{{ h('welcome_user_desc').format(username=current_user.username) }}</p>
+{% else %}
+<h2>{{ h('welcome_guest') }}</h2>
+<p>{{ h('welcome_guest_desc') }}</p>
+{% endif %}
+</section>
+
+<section class="card" id="stories">
+<h3 class="section-title">📖 {{ h('stories_title') }}</h3>
+<div class="stories">
+<div class="story add"><div class="avatar">＋</div><span>{{ h('your_story') }}</span></div>
+</div>
+</section>
+
+<section class="card">
+<h3 class="section-title">✍️ {{ h('create_post') }}</h3>
+<div class="composer">
+<div class="avatar">{% if current_user.is_authenticated %}{{ current_user.full_name[:1] }}{% else %}N{% endif %}</div>
+<div class="composer-input">{{ h('post_placeholder') }}</div>
+</div>
+<div class="composer-actions">
+<span class="action">📷 {{ h('photo') }}</span>
+<span class="action">🎥 {{ h('video') }}</span>
+<span class="action">😊 {{ h('feeling') }}</span>
+</div>
+</section>
+
+<section class="card" id="feed">
+<h3 class="section-title">📰 {{ h('news_feed') }}</h3>
+<p class="notice">{{ h('no_posts') }}</p>
+</section>
+
+<section class="card" id="videos">
+<h3 class="section-title">🎬 {{ h('videos_title') }}</h3>
+<p class="notice">{{ h('videos_desc') }}</p>
+</section>
+</main>
+
+<aside class="rightbar">
+<div class="panel" id="friends">
+<h3 class="section-title">👥 {{ h('find_friends') }}</h3>
+<div class="suggestion"><div class="avatar">👤</div><div class="suggestion-info"><strong>{{ h('new_friend') }}</strong><small>{{ h('join_community') }}</small></div><span class="badge">{{ h('soon') }}</span></div>
+<div class="suggestion"><div class="avatar">🌟</div><div class="suggestion-info"><strong>{{ h("people_label") }}</strong><small>{{ h("discover_people") }}</small></div><span class="badge">{{ h('soon') }}</span></div>
+</div>
+<div class="panel" id="notifications">
+<h3 class="section-title">🔔 {{ h("notifications_title") }}</h3>
+<p class="notice">{{ h('notifications_desc') }}</p>
+</div>
+<div class="panel" id="groups">
+<h3 class="section-title">🌐 {{ h("groups_title") }}</h3>
+<p class="notice">{{ h('groups_desc') }}</p>
+</div>
+<div class="panel" id="settings">
+<h3 class="section-title">⚙️ {{ t('settings') }}</h3>
+<a href="{{ url_for('language_settings') }}">🌐 {{ t('language') }}</a>
+<p class="notice">{{ h('settings_desc') }}</p>
+</div>
+</aside>
+</div>
+
+<nav class="mobile-nav">
+<a href="/">🏠<small>{{ t('home') }}</small></a>
+<a href="#friends">👥<small>{{ t('friends') }}</small></a>
+<a href="#videos">🎬<small>{{ t('videos') }}</small></a>
+<a href="#messages">💬<small>{{ t('messenger') }}</small></a>
+<a href="/profile">👤<small>{{ t('profile') }}</small></a>
+</nav>
+
+<footer>© 2026 NET BOOK · {{ h("footer_tagline") }}</footer>
+
+<script>
+(function(){
+  const toggle = document.getElementById('menuToggle');
+  const menu = document.getElementById('mainMenu');
+  if (!toggle || !menu) return;
+  toggle.addEventListener('click', function(){
+    const opened = menu.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(opened));
+  });
+  document.addEventListener('click', function(event){
+    if (!event.target.closest('.menu-wrap')) {
+      menu.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
