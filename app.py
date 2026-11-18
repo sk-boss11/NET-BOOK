@@ -85,6 +85,15 @@ class VerificationOTP(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
 
+class PasswordResetOTP(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    code_hash = db.Column(db.String(255), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -283,6 +292,138 @@ def verify_account():
     return render_template("verify.html")
 
 
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("3 per 15 minutes")
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for("home"))
+
+    if request.method == "POST":
+        identity = request.form.get("identity", "").strip().lower()
+        user = User.query.filter(or_(
+            User.email == identity,
+            User.phone == identity,
+            User.username == identity
+        )).first()
+
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_verified", None)
+
+        if user and user.is_active and user.email and user.email_verified:
+            code = f"{secrets.randbelow(1_000_000):06d}"
+
+            if send_otp(user, code):
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                try:
+                    PasswordResetOTP.query.filter_by(user_id=user.id).delete()
+                    db.session.add(PasswordResetOTP(
+                        user_id=user.id,
+                        code_hash=generate_password_hash(code, method="scrypt"),
+                        expires_at=now + timedelta(minutes=10),
+                        attempts=0
+                    ))
+                    db.session.commit()
+                    session["password_reset_user_id"] = user.id
+                    flash("আপনার Email-এ OTP পাঠানো হয়েছে। ১০ মিনিটের মধ্যে ব্যবহার করুন।", "success")
+                    return redirect(url_for("verify_password_reset"))
+                except Exception:
+                    db.session.rollback()
+                    flash("OTP প্রক্রিয়ায় সমস্যা হয়েছে। আবার চেষ্টা করুন।", "error")
+            else:
+                flash("OTP পাঠানো যায়নি। Email SMTP কনফিগারেশন পরীক্ষা করুন।", "error")
+        else:
+            flash("এই তথ্যের জন্য Password Recovery উপলব্ধ নয়। Verified Email অ্যাকাউন্ট ব্যবহার করুন।", "warning")
+
+    return render_template("forgot_password.html")
+
+
+@app.route("/verify-password-reset", methods=["GET", "POST"])
+@limiter.limit("10 per 15 minutes")
+def verify_password_reset():
+    user_id = session.get("password_reset_user_id")
+    user = db.session.get(User, user_id) if user_id else None
+
+    if not user or not user.is_active:
+        session.pop("password_reset_user_id", None)
+        flash("প্রথমে Password Recovery শুরু করুন।", "warning")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        code = request.form.get("otp", "").strip()
+        otp = PasswordResetOTP.query.filter_by(user_id=user.id).first()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if not otp or otp.expires_at <= now or otp.attempts >= 5:
+            if otp:
+                db.session.delete(otp)
+                db.session.commit()
+            session.pop("password_reset_user_id", None)
+            flash("OTP-এর মেয়াদ শেষ অথবা চেষ্টার সীমা শেষ। আবার শুরু করুন।", "error")
+            return redirect(url_for("forgot_password"))
+
+        if not re.fullmatch(r"[0-9]{6}", code):
+            flash("৬ সংখ্যার OTP লিখুন।", "error")
+        else:
+            otp.attempts += 1
+            if check_password_hash(otp.code_hash, code):
+                db.session.commit()
+                session["password_reset_verified"] = True
+                flash("OTP সঠিক। এবার নতুন Password দিন।", "success")
+                return redirect(url_for("reset_password"))
+
+            db.session.commit()
+            flash("OTP সঠিক নয়। আবার চেষ্টা করুন।", "error")
+
+    return render_template("verify_password_reset.html")
+
+
+@app.route("/reset-password", methods=["GET", "POST"])
+@limiter.limit("5 per 15 minutes")
+def reset_password():
+    user_id = session.get("password_reset_user_id")
+    user = db.session.get(User, user_id) if user_id else None
+
+    otp = PasswordResetOTP.query.filter_by(user_id=user.id).first() if user else None
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    if (
+        not user
+        or not user.is_active
+        or not session.get("password_reset_verified")
+        or not otp
+        or otp.expires_at <= now
+        or otp.attempts >= 5
+    ):
+        if otp:
+            db.session.delete(otp)
+            db.session.commit()
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_verified", None)
+        flash("OTP-এর মেয়াদ শেষ অথবা আগে OTP Verify করা হয়নি। আবার শুরু করুন।", "warning")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        if len(password) < 10:
+            flash("Password কমপক্ষে ১০ অক্ষরের হতে হবে।", "error")
+        elif password != confirm:
+            flash("দুটি Password মিলছে না।", "error")
+        else:
+            user.password_hash = generate_password_hash(password, method="scrypt")
+            PasswordResetOTP.query.filter_by(user_id=user.id).delete()
+            db.session.commit()
+
+            session.pop("password_reset_user_id", None)
+            session.pop("password_reset_verified", None)
+            flash("Password সফলভাবে পরিবর্তন হয়েছে। এখন নতুন Password দিয়ে Login করুন।", "success")
+            return redirect(url_for("login"))
+
+    return render_template("reset_password.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("5 per minute")
 def login():
@@ -387,7 +528,7 @@ def edit_profile_details():
         field = request.form.get("field", "")
         if field not in fields:
             flash("সঠিক তথ্য নির্বাচন করুন।", "error")
-            return redirect(url_for("edit_profile_details"))
+            return redirect(url_for("profile"))
 
         attribute, limit, label = fields[field]
         value = request.form.get(field, "").strip()
@@ -403,9 +544,16 @@ def edit_profile_details():
             db.session.commit()
             flash(f"{label} সফলভাবে আপডেট হয়েছে।", "success")
 
-        return redirect(url_for("edit_profile_details"))
+        return redirect(url_for("profile"))
 
-    return render_template("edit_profile.html", profile_user=current_user)
+    selected_field = request.args.get("field", "")
+    if selected_field not in fields:
+        selected_field = ""
+    return render_template(
+        "edit_profile.html",
+        profile_user=current_user,
+        selected_field=selected_field
+    )
 
 
 

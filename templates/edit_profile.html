@@ -40,6 +40,8 @@ button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white
 <h2>✏️ Edit Profile Details</h2>
 <div class="sub">প্রতিটি তথ্য আলাদাভাবে পরিবর্তন করতে পারবেন।</div>
 
+
+{% if not selected_field or selected_field == 'location' %}
 <div class="item">
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -49,7 +51,9 @@ button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white
 <button type="submit">Save Location</button>
 </form>
 </div>
+{% endif %}
 
+{% if not selected_field or selected_field == 'university' %}
 <div class="item">
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -59,7 +63,9 @@ button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white
 <button type="submit">Save University</button>
 </form>
 </div>
+{% endif %}
 
+{% if not selected_field or selected_field == 'bio' %}
 <div class="item">
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -69,7 +75,9 @@ button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white
 <button type="submit">Save Bio</button>
 </form>
 </div>
+{% endif %}
 
+{% if not selected_field or selected_field == 'website' %}
 <div class="item">
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -79,6 +87,8 @@ button{margin-top:10px;border:0;border-radius:9px;background:#1877f2;color:white
 <button type="submit">Save Website</button>
 </form>
 </div>
+{% endif %}
+
 </section>
 </main>
 </body>
