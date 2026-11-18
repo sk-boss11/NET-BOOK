@@ -18,11 +18,22 @@ from PIL import Image, ImageOps
 import uuid
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "instance")))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+secret_file = DATA_DIR / "secret_key"
+secret_key = os.environ.get("SECRET_KEY")
+if not secret_key:
+    if secret_file.exists():
+        secret_key = secret_file.read_text(encoding="utf-8").strip()
+    else:
+        secret_key = secrets.token_hex(32)
+        secret_file.write_text(secret_key, encoding="utf-8")
 
 app = Flask(__name__)
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY") or (BASE_DIR / "instance" / "secret_key").read_text(encoding="utf-8").strip(),
-    SQLALCHEMY_DATABASE_URI=f"sqlite:///{BASE_DIR / 'instance' / 'netbook.db'}",
+    SECRET_KEY=secret_key,
+    SQLALCHEMY_DATABASE_URI=f"sqlite:///{DATA_DIR / 'netbook.db'}",
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
     REMEMBER_COOKIE_DURATION=timedelta(days=365),
@@ -432,7 +443,8 @@ def health():
     return {"app": "NET BOOK", "status": "running"}
 
 
+with app.app_context():
+    db.create_all()
+
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=False)
