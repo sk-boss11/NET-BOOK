@@ -310,7 +310,7 @@ def forgot_password():
         session.pop("password_reset_user_id", None)
         session.pop("password_reset_verified", None)
 
-        if user and user.is_active and user.email and user.email_verified:
+        if user and user.is_active and user.email:
             code = f"{secrets.randbelow(1_000_000):06d}"
 
             if send_otp(user, code):
@@ -367,6 +367,8 @@ def verify_password_reset():
         else:
             otp.attempts += 1
             if check_password_hash(otp.code_hash, code):
+                if user.email:
+                    user.email_verified = True
                 db.session.commit()
                 session["password_reset_verified"] = True
                 flash("OTP সঠিক। এবার নতুন Password দিন।", "success")
