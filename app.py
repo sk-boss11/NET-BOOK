@@ -120,7 +120,67 @@ def inject_language():
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    posts = (
+        Post.query
+        .order_by(Post.created_at.desc(), Post.id.desc())
+        .limit(30)
+        .all()
+    )
+    post_authors = {
+        post.id: db.session.get(User, post.user_id)
+        for post in posts
+    }
+    return render_template(
+        "index.html",
+        posts=posts,
+        post_authors=post_authors
+    )
+
+
+@app.route("/posts/create", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute")
+def create_post():
+    content = request.form.get("content", "").strip()
+
+    if not content:
+        flash("পোস্টের লেখা খালি রাখা যাবে না।", "error")
+    elif len(content) > 5000:
+        flash("পোস্ট সর্বোচ্চ ৫০০০ অক্ষরের হতে পারবে।", "error")
+    else:
+        try:
+            post = Post(user_id=current_user.id, content=content)
+            db.session.add(post)
+            db.session.commit()
+            flash("আপনার পোস্ট সফলভাবে প্রকাশিত হয়েছে।", "success")
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Post creation failed")
+            flash("পোস্ট প্রকাশ করা যায়নি। আবার চেষ্টা করুন।", "error")
+
+    return redirect(url_for("home"))
+
+
+@app.route("/posts/<int:post_id>/delete", methods=["POST"])
+@login_required
+def delete_post(post_id):
+    post = db.session.get(Post, post_id)
+
+    if post is None:
+        flash("পোস্টটি পাওয়া যায়নি।", "error")
+    elif post.user_id != current_user.id:
+        flash("শুধু নিজের পোস্ট মুছে ফেলতে পারবেন।", "error")
+    else:
+        try:
+            db.session.delete(post)
+            db.session.commit()
+            flash("পোস্ট মুছে ফেলা হয়েছে।", "success")
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Post deletion failed")
+            flash("পোস্ট মুছে ফেলা যায়নি।", "error")
+
+    return redirect(url_for("home"))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -136,18 +196,13 @@ def register():
         password = request.form.get("password", "")
         confirm = request.form.get("confirm_password", "")
 
-        # One contact field: detect email or phone automatically.
         if "@" in contact:
-            email = contact.lower()
-            phone = None
+            email, phone = contact.lower(), None
         else:
-            email = None
-            phone = contact or None
+            email, phone = None, contact or None
 
         if not all([name, username, contact, password, confirm]):
-            flash("নাম, Username ও Password পূরণ করুন।", "error")
-        elif bool(email) == bool(phone):
-            flash("Email অথবা Phone—যেকোনো একটি দিন।", "error")
+            flash("সব প্রয়োজনীয় তথ্য পূরণ করুন।", "error")
         elif len(name) > 100 or not re.fullmatch(r"[a-z0-9_]{3,30}", username):
             flash("নাম অথবা Username সঠিক নয়।", "error")
         elif email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
@@ -171,26 +226,19 @@ def register():
                 email=email,
                 phone=phone,
                 password_hash=generate_password_hash(password, method="scrypt"),
-                email_verified=False,
-                phone_verified=False
+                email_verified=True,
+                phone_verified=True
             )
-            db.session.add(user)
-            db.session.commit()
-            session["pending_verification_user_id"] = user.id
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-            code = f"{secrets.randbelow(1_000_000):06d}"
-            db.session.add(VerificationOTP(
-                user_id=user.id,
-                code_hash=generate_password_hash(code, method="scrypt"),
-                expires_at=now + timedelta(minutes=10),
-                attempts=0
-            ))
-            db.session.commit()
-            if send_otp(user, code):
-                flash("আপনার নির্বাচিত মাধ্যমে OTP পাঠানো হয়েছে।", "success")
-            else:
-                flash("অ্যাকাউন্ট তৈরি হয়েছে, কিন্তু OTP পাঠানো যায়নি। Email SMTP অথবা SMS gateway কনফিগার করতে হবে।", "warning")
-            return redirect(url_for("verify_account"))
+            try:
+                db.session.add(user)
+                db.session.commit()
+                login_user(user, remember=True)
+                flash("অ্যাকাউন্ট তৈরি হয়েছে। স্বাগতম NET BOOK-এ!", "success")
+                return redirect(url_for("home"))
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Registration failed")
+                flash("অ্যাকাউন্ট তৈরি করা যায়নি। আবার চেষ্টা করুন।", "error")
 
     return render_template("register.html")
 
@@ -433,30 +481,22 @@ def login():
         return redirect(url_for("home"))
 
     if request.method == "POST":
-        identity = request.form.get("identity", "").strip().lower()
+        identity = request.form.get("identity", "").strip()
         password = request.form.get("password", "")
 
-        user = User.query.filter(or_(
-            User.email == identity,
-            User.phone == identity,
-            User.username == identity
-        )).first()
+        if "@" in identity:
+            user = User.query.filter_by(email=identity.lower()).first()
+        else:
+            user = User.query.filter_by(phone=identity).first()
 
         if user and user.is_active and check_password_hash(user.password_hash, password):
-            verified = user.email_verified if user.email else user.phone_verified
-            if not verified:
-                session["pending_verification_user_id"] = user.id
-                flash("আপনার অ্যাকাউন্ট Verify করুন। OTP দিন।", "warning")
-                return redirect(url_for("verify_account"))
             login_user(user, remember=True)
             flash("সফলভাবে Login হয়েছে।", "success")
             return redirect(url_for("home"))
 
-        flash("তথ্য অথবা Password সঠিক নয়।", "error")
+        flash("ফোন নম্বর অথবা Email এবং Password সঠিক নয়।", "error")
 
     return render_template("login.html")
-
-
 
 
 @app.route("/profile", methods=["GET", "POST"])

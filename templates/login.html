@@ -28,7 +28,7 @@ a{color:#1877f2;text-decoration:none}
 {% endwith %}
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<input name="identity" placeholder="{{ t('identity_placeholder') }}" required>
+<input type="text" name="identity" placeholder="ফোন নম্বর অথবা Gmail / Email" autocomplete="username" required>
 <input type="password" name="password" placeholder="{{ t('password_placeholder') }}" required>
 <button type="submit">{{ t('login_button') }}</button>
 </form>

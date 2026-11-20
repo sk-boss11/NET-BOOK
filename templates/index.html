@@ -162,22 +162,57 @@ footer{padding-bottom:85px}
 </div>
 </section>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="panel notice">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
 <section class="card">
 <h3 class="section-title">✍️ {{ h('create_post') }}</h3>
+{% if current_user.is_authenticated %}
+<form method="POST" action="{{ url_for('create_post') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="composer">
-<div class="avatar">{% if current_user.is_authenticated %}{{ current_user.full_name[:1] }}{% else %}N{% endif %}</div>
-<div class="composer-input">{{ h('post_placeholder') }}</div>
+<div class="avatar">{{ current_user.full_name[:1] }}</div>
+<textarea name="content" class="composer-input" maxlength="5000" rows="3" required placeholder="{{ h('post_placeholder') }}"></textarea>
 </div>
 <div class="composer-actions">
 <span class="action">📷 {{ h('photo') }}</span>
 <span class="action">🎥 {{ h('video') }}</span>
 <span class="action">😊 {{ h('feeling') }}</span>
+<button type="submit" class="action">🚀 পোস্ট প্রকাশ করুন</button>
 </div>
+</form>
+{% else %}
+<p class="notice">পোস্ট করতে <a href="{{ url_for('login') }}">লগইন</a> করুন অথবা <a href="{{ url_for('register') }}">নতুন অ্যাকাউন্ট তৈরি করুন</a>।</p>
+{% endif %}
 </section>
 
 <section class="card" id="feed">
 <h3 class="section-title">📰 {{ h('news_feed') }}</h3>
+{% for post in posts %}
+{% set author = post_authors.get(post.id) %}
+<article class="panel" style="margin-bottom:16px;">
+<div class="post-head">
+<div class="avatar">{% if author %}{{ author.full_name[:1] }}{% else %}N{% endif %}</div>
+<div>
+<strong>{% if author %}{{ author.full_name }}{% else %}NET BOOK User{% endif %}</strong>
+{% if author %}<div class="notice">@{{ author.username }}</div>{% endif %}
+<small>{{ post.created_at.strftime('%d %b %Y, %I:%M %p') if post.created_at else '' }}</small>
+</div>
+</div>
+<div class="post-content">{{ post.content }}</div>
+{% if current_user.is_authenticated and current_user.id == post.user_id %}
+<form method="POST" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('আপনি কি পোস্টটি মুছে ফেলতে চান?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button type="submit" class="action">🗑️ পোস্ট মুছুন</button>
+</form>
+{% endif %}
+</article>
+{% else %}
 <p class="notice">{{ h('no_posts') }}</p>
+{% endfor %}
 </section>
 
 <section class="card" id="videos">
