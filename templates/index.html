@@ -88,18 +88,18 @@ footer{padding-bottom:85px}
 <input class="search" type="search" placeholder="🔎 {{ t('search') }}">
 <div class="top-actions">
 <a class="circle" href="{{ url_for('language_settings') }}" title="{{ t('language') }}" aria-label="{{ t('language') }}">🌐</a>
-<a class="circle" href="#messages" title="{{ t('messenger') }}">💬</a>
+<a class="circle" href="{{ url_for('messages') }}" title="{{ t('messenger') }}">💬</a>
 <a class="circle" href="#notifications" title="{{ t('notifications') }}">🔔</a>
 <div class="menu-wrap">
 <button class="menu-toggle" type="button" id="menuToggle" aria-expanded="false" aria-controls="mainMenu">☰ {{ t('menu') }}</button>
 <div class="menu-dropdown" id="mainMenu">
 <a href="/">🏠 {{ t('home') }}</a>
 <a href="/profile">👤 {{ t('profile') }}</a>
-<a href="#friends">👥 {{ t('friends') }}</a>
+<a href="{{ url_for('friends') }}">👥 {{ t('friends') }}</a>
 <a href="#videos">🎬 {{ t('videos') }}</a>
 <a href="#stories">📖 {{ t('stories') }}</a>
 <a href="#groups">🌐 {{ t('groups') }}</a>
-<a href="#messages">💬 {{ t('messenger') }}</a>
+<a href="{{ url_for('messages') }}">💬 {{ t('messenger') }}</a>
 <a href="#notifications">🔔 {{ t('notifications') }}</a>
 <a href="{{ url_for('language_settings') }}">🌐 {{ t('language') }}</a>
 {% if current_user.is_authenticated %}
@@ -129,11 +129,11 @@ footer{padding-bottom:85px}
 <nav class="menu">
 <a class="active" href="/"><span class="menu-icon">🏠</span> {{ t('home') }}</a>
 <a href="/profile"><span class="menu-icon">👤</span> {{ t('profile') }}</a>
-<a href="#friends"><span class="menu-icon">👥</span> {{ t('friends') }}</a>
+<a href="{{ url_for('friends') }}"><span class="menu-icon">👥</span> {{ t('friends') }}</a>
 <a href="#videos"><span class="menu-icon">🎬</span> {{ t('videos') }}</a>
 <a href="#stories"><span class="menu-icon">📖</span> {{ t('stories') }}</a>
 <a href="#groups"><span class="menu-icon">🌐</span> {{ t('groups') }}</a>
-<a href="#messages"><span class="menu-icon">💬</span> {{ t('messenger') }}</a>
+<a href="{{ url_for('messages') }}"><span class="menu-icon">💬</span> {{ t('messenger') }}</a>
 <a href="#notifications"><span class="menu-icon">🔔</span> {{ t('notifications') }}</a>
 <a href="#settings"><span class="menu-icon">⚙️</span> {{ t('settings') }}</a>
 </nav>
@@ -245,9 +245,9 @@ footer{padding-bottom:85px}
 
 <nav class="mobile-nav">
 <a href="/">🏠<small>{{ t('home') }}</small></a>
-<a href="#friends">👥<small>{{ t('friends') }}</small></a>
+<a href="{{ url_for('friends') }}">👥<small>{{ t('friends') }}</small></a>
 <a href="#videos">🎬<small>{{ t('videos') }}</small></a>
-<a href="#messages">💬<small>{{ t('messenger') }}</small></a>
+<a href="{{ url_for('messages') }}">💬<small>{{ t('messenger') }}</small></a>
 <a href="/profile">👤<small>{{ t('profile') }}</small></a>
 </nav>
 

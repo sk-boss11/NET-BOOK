@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="{{ current_language }}" dir="{{ language_dir }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1877f2">
+<title>Messages - NET BOOK</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,"Noto Sans Bengali",sans-serif;background:#f0f2f5;color:#202124}
+a{text-decoration:none;color:inherit}
+.topbar{height:62px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 5%;box-shadow:0 1px 5px #ddd}
+.brand{font-size:25px;font-weight:800;color:#1877f2}
+.back{background:#eaf2ff;color:#1877f2;padding:10px 16px;border-radius:20px;font-size:14px;font-weight:bold}
+.container{max-width:1050px;margin:25px auto;padding:0 15px}
+.heading{font-size:23px;margin-bottom:18px}
+.chat-layout{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:570px}
+.panel{background:#fff;border-radius:13px;box-shadow:0 1px 4px #ddd;overflow:hidden}
+.panel-title{padding:19px;font-size:18px;font-weight:bold;border-bottom:1px solid #eee}
+.friend{display:flex;align-items:center;gap:12px;padding:14px 17px;border-bottom:1px solid #f0f0f0;transition:.2s}
+.friend:hover{background:#f0f6ff}
+.avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1877f2,#7658e8);display:grid;place-items:center;color:white;font-size:19px;font-weight:bold;flex-shrink:0;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.friend-info{min-width:0}
+.friend-info strong{font-size:14px;display:block}
+.friend-info small{font-size:12px;color:#888;display:block;margin-top:5px}
+.empty{text-align:center;color:#777;padding:35px 18px;font-size:14px;line-height:1.8}
+.chat-empty{display:flex;align-items:center;justify-content:center;text-align:center;padding:25px;color:#777;line-height:1.9}
+.chat-icon{font-size:55px;margin-bottom:12px}
+@media(max-width:650px){.container{margin:15px auto;padding:0 10px}.chat-layout{grid-template-columns:1fr;min-height:auto}.chat-empty{min-height:220px}.heading{font-size:20px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="/">NET BOOK</a>
+<a class="back" href="/">← Home</a>
+</header>
+<main class="container">
+<h1 class="heading">💬 Messages</h1>
+<div class="chat-layout">
+<section class="panel">
+<div class="panel-title">Friends</div>
+{% for friend in friends_list %}
+<a class="friend" href="{{ url_for('chat', user_id=friend.id) }}">
+<div class="avatar">
+{% if friend.profile_picture %}
+<img src="{{ friend.profile_picture }}" alt="">
+{% else %}
+{{ friend.full_name[:1] }}
+{% endif %}
+</div>
+<div class="friend-info">
+<strong>{{ friend.full_name }}</strong>
+<small>@{{ friend.username }}</small>
+</div>
+</a>
+{% else %}
+<div class="empty">এখনো কোনো Friend নেই।<br>Friends পেজ থেকে বন্ধু যোগ করুন।</div>
+{% endfor %}
+</section>
+<section class="panel chat-empty">
+<div>
+<div class="chat-icon">💬</div>
+<strong>NET BOOK Messages</strong>
+<p>চ্যাট শুরু করতে বাম পাশ থেকে একজন Friend নির্বাচন করুন।</p>
+</div>
+</section>
+</div>
+</main>
+</body>
+</html>

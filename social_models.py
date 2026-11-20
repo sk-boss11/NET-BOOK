@@ -53,4 +53,30 @@ def register_social_models(db):
             db.UniqueConstraint("group_id", "user_id"),
         )
 
-    return Post, FriendRequest, Notification, Story, SocialGroup, GroupMember
+    class Reel(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+        video_url = db.Column(db.String(1000), nullable=False)
+        thumbnail_url = db.Column(db.String(1000))
+        caption = db.Column(db.String(2000), nullable=False, default="")
+        duration_seconds = db.Column(db.Float, nullable=False)
+        width = db.Column(db.Integer, nullable=False)
+        height = db.Column(db.Integer, nullable=False)
+        status = db.Column(db.String(20), nullable=False, default="processing", index=True)
+        created_at = db.Column(db.DateTime, server_default=db.func.now(), index=True)
+
+    class ReelLike(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        reel_id = db.Column(db.Integer, db.ForeignKey("reel.id"), nullable=False, index=True)
+        user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+        created_at = db.Column(db.DateTime, server_default=db.func.now())
+        __table_args__ = (db.UniqueConstraint("reel_id", "user_id"),)
+
+    class ReelComment(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        reel_id = db.Column(db.Integer, db.ForeignKey("reel.id"), nullable=False, index=True)
+        user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+        content = db.Column(db.String(2000), nullable=False)
+        created_at = db.Column(db.DateTime, server_default=db.func.now(), index=True)
+
+    return Post, FriendRequest, Notification, Story, SocialGroup, GroupMember, Reel, ReelLike, ReelComment

@@ -30,10 +30,16 @@ if not secret_key:
         secret_key = secrets.token_hex(32)
         secret_file.write_text(secret_key, encoding="utf-8")
 
+database_url = os.environ.get("DATABASE_URL", "").strip()
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=secret_key,
-    SQLALCHEMY_DATABASE_URI=f"sqlite:///{DATA_DIR / 'netbook.db'}",
+    SQLALCHEMY_DATABASE_URI=database_url or f"sqlite:///{DATA_DIR / 'netbook.db'}",
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
     REMEMBER_COOKIE_DURATION=timedelta(days=365),
@@ -73,7 +79,18 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
 
-Post, FriendRequest, Notification, Story, SocialGroup, GroupMember = register_social_models(db)
+Post, FriendRequest, Notification, Story, SocialGroup, GroupMember, Reel, ReelLike, ReelComment = register_social_models(db)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    content = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), index=True)
+
+
+
 
 
 class VerificationOTP(db.Model):
@@ -598,6 +615,100 @@ def edit_profile_details():
     )
 
 
+
+
+@app.route("/messages")
+@login_required
+def messages():
+    accepted = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            FriendRequest.sender_id == current_user.id,
+            FriendRequest.receiver_id == current_user.id
+        )
+    ).all()
+
+    friend_ids = {
+        item.receiver_id if item.sender_id == current_user.id
+        else item.sender_id
+        for item in accepted
+    }
+
+    friends_list = User.query.filter(
+        User.id.in_(friend_ids),
+        User.is_active.is_(True)
+    ).order_by(User.full_name.asc()).all() if friend_ids else []
+
+    return render_template("messages.html", friends_list=friends_list)
+
+
+@app.route("/messages/<int:user_id>", methods=["GET", "POST"])
+@login_required
+def chat(user_id):
+    friend = db.session.get(User, user_id)
+
+    if not friend or not friend.is_active or friend.id == current_user.id:
+        flash("ব্যবহারকারীকে পাওয়া যায়নি।", "error")
+        return redirect(url_for("messages"))
+
+    friendship = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            db.and_(
+                FriendRequest.sender_id == current_user.id,
+                FriendRequest.receiver_id == friend.id
+            ),
+            db.and_(
+                FriendRequest.sender_id == friend.id,
+                FriendRequest.receiver_id == current_user.id
+            )
+        )
+    ).first()
+
+    if not friendship:
+        flash("শুধু Accepted Friends-দের সঙ্গে Chat করা যাবে।", "error")
+        return redirect(url_for("messages"))
+
+    if request.method == "POST":
+        content = request.form.get("content", "").strip()
+        if not content:
+            flash("মেসেজ লিখুন।", "error")
+        elif len(content) > 5000:
+            flash("মেসেজ সর্বোচ্চ ৫০০০ অক্ষরের হতে পারবে।", "error")
+        else:
+            db.session.add(Message(
+                sender_id=current_user.id,
+                recipient_id=friend.id,
+                content=content
+            ))
+            db.session.commit()
+        return redirect(url_for("chat", user_id=friend.id))
+
+    chat_messages = Message.query.filter(
+        or_(
+            db.and_(
+                Message.sender_id == current_user.id,
+                Message.recipient_id == friend.id
+            ),
+            db.and_(
+                Message.sender_id == friend.id,
+                Message.recipient_id == current_user.id
+            )
+        )
+    ).order_by(Message.created_at.asc(), Message.id.asc()).all()
+
+    Message.query.filter_by(
+        sender_id=friend.id,
+        recipient_id=current_user.id,
+        is_read=False
+    ).update({"is_read": True})
+    db.session.commit()
+
+    return render_template(
+        "chat.html",
+        friend=friend,
+        chat_messages=chat_messages
+    )
 
 
 @app.route("/friends")
