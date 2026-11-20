@@ -600,6 +600,191 @@ def edit_profile_details():
 
 
 
+@app.route("/friends")
+@login_required
+def friends():
+    page = max(request.args.get("page", 1, type=int), 1)
+    search = request.args.get("q", "").strip()[:80]
+
+    query = User.query.filter(
+        User.id != current_user.id,
+        User.is_active.is_(True)
+    )
+
+    if search:
+        query = query.filter(or_(
+            User.full_name.ilike(f"%{search}%"),
+            User.username.ilike(f"%{search}%")
+        ))
+
+    users_page = query.order_by(User.full_name.asc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
+
+    incoming_requests = FriendRequest.query.filter_by(
+        receiver_id=current_user.id, status="pending"
+    ).order_by(FriendRequest.created_at.desc()).all()
+
+    outgoing_requests = FriendRequest.query.filter_by(
+        sender_id=current_user.id, status="pending"
+    ).all()
+
+    accepted = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            FriendRequest.sender_id == current_user.id,
+            FriendRequest.receiver_id == current_user.id
+        )
+    ).all()
+
+    friend_ids = {
+        item.receiver_id if item.sender_id == current_user.id
+        else item.sender_id for item in accepted
+    }
+
+    incoming_senders = {item.id: db.session.get(User, item.sender_id) for item in incoming_requests}
+
+    return render_template(
+        "friends.html",
+        users=users_page.items,
+        users_page=users_page,
+        incoming_requests=incoming_requests,
+        incoming_senders=incoming_senders,
+        friend_ids=friend_ids,
+        outgoing_ids={item.receiver_id for item in outgoing_requests},
+        outgoing_requests_map={item.receiver_id: item.id for item in outgoing_requests},
+        incoming_ids={item.sender_id for item in incoming_requests},
+        search=search
+    )
+
+
+@app.route("/friends/request/<int:user_id>", methods=["POST"])
+@login_required
+@limiter.limit("20 per hour")
+def send_friend_request(user_id):
+    if user_id == current_user.id:
+        flash("নিজেকে Friend Request পাঠানো যাবে না।", "error")
+        return redirect(url_for("friends"))
+
+    target = db.session.get(User, user_id)
+    if not target or not target.is_active:
+        flash("ব্যবহারকারীকে পাওয়া যায়নি।", "error")
+        return redirect(url_for("friends"))
+
+    existing = FriendRequest.query.filter(or_(
+        db.and_(
+            FriendRequest.sender_id == current_user.id,
+            FriendRequest.receiver_id == user_id
+        ),
+        db.and_(
+            FriendRequest.sender_id == user_id,
+            FriendRequest.receiver_id == current_user.id
+        )
+    )).all()
+
+    if any(item.status == "accepted" for item in existing):
+        flash("আপনারা ইতিমধ্যে Friends।", "info")
+        return redirect(url_for("friends"))
+
+    reverse_pending = any(
+        item.sender_id == user_id
+        and item.receiver_id == current_user.id
+        and item.status == "pending"
+        for item in existing
+    )
+    if reverse_pending:
+        flash("এই ব্যক্তির Friend Request আপনার অপেক্ষায় আছে।", "info")
+        return redirect(url_for("friends"))
+
+    own_request = next((
+        item for item in existing
+        if item.sender_id == current_user.id
+        and item.receiver_id == user_id
+    ), None)
+
+    if own_request and own_request.status == "pending":
+        flash("আপনি ইতিমধ্যে Request পাঠিয়েছেন।", "info")
+    elif own_request:
+        own_request.status = "pending"
+        own_request.created_at = datetime.utcnow()
+        db.session.commit()
+        flash("Friend Request আবার পাঠানো হয়েছে।", "success")
+    else:
+        db.session.add(FriendRequest(
+            sender_id=current_user.id,
+            receiver_id=user_id,
+            status="pending"
+        ))
+        db.session.commit()
+        flash("Friend Request পাঠানো হয়েছে।", "success")
+
+    return redirect(url_for("friends"))
+
+
+@app.route("/friends/accept/<int:request_id>", methods=["POST"])
+@login_required
+def accept_friend_request(request_id):
+    item = db.session.get(FriendRequest, request_id)
+
+    if not item or item.receiver_id != current_user.id or item.status != "pending":
+        flash("এই Friend Request গ্রহণ করা যাচ্ছে না।", "error")
+        return redirect(url_for("friends"))
+
+    reverse = FriendRequest.query.filter_by(
+        sender_id=current_user.id,
+        receiver_id=item.sender_id,
+        status="accepted"
+    ).first()
+
+    if reverse:
+        item.status = "rejected"
+        db.session.commit()
+        flash("আপনারা ইতিমধ্যে Friends।", "info")
+        return redirect(url_for("friends"))
+
+    item.status = "accepted"
+    db.session.commit()
+    flash("Friend Request গ্রহণ হয়েছে। এখন আপনারা দুজন Friends।", "success")
+    return redirect(url_for("friends"))
+
+
+@app.route("/friends/reject/<int:request_id>", methods=["POST"])
+@login_required
+def reject_friend_request(request_id):
+    item = db.session.get(FriendRequest, request_id)
+
+    if not item or item.receiver_id != current_user.id or item.status != "pending":
+        flash("এই Friend Request প্রত্যাখ্যান করা যাচ্ছে না।", "error")
+        return redirect(url_for("friends"))
+
+    item.status = "rejected"
+    db.session.commit()
+    flash("Friend Request প্রত্যাখ্যান করা হয়েছে।", "success")
+    return redirect(url_for("friends"))
+
+
+@app.route("/friends/cancel/<int:request_id>", methods=["POST"])
+@login_required
+def cancel_friend_request(request_id):
+    item = db.session.get(FriendRequest, request_id)
+
+    if not item or item.sender_id != current_user.id or item.status != "pending":
+        flash("এই Request বাতিল করা যাচ্ছে না।", "error")
+        return redirect(url_for("friends"))
+
+    item.status = "rejected"
+    db.session.commit()
+    flash("Friend Request বাতিল করা হয়েছে।", "success")
+    return redirect(url_for("friends"))
+
+
+@app.route("/users/<username>")
+@login_required
+def public_profile(username):
+    profile_user = User.query.filter_by(username=username).first_or_404()
+    return render_template("public_profile.html", profile_user=profile_user)
+
+
 @app.route("/settings/language", methods=["GET", "POST"])
 def language_settings():
     if request.method == "POST":

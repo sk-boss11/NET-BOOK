@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="{{ current_language }}" dir="{{ language_dir }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1877f2">
+<title>Friends | NET BOOK</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--blue:#1877f2;--bg:#f0f2f5;--text:#202124;--muted:#777;--line:#e8e8e8}
+body{font-family:Arial,"Noto Sans Bengali",sans-serif;background:var(--bg);color:var(--text)}
+a{text-decoration:none;color:inherit}
+button{font:inherit;cursor:pointer;border:0}
+.topbar{height:62px;background:white;display:flex;align-items:center;justify-content:space-between;padding:0 5%;box-shadow:0 1px 5px #ddd;position:sticky;top:0;z-index:10}
+.brand{font-size:25px;font-weight:800;color:var(--blue)}
+.toplinks{display:flex;align-items:center;gap:18px;font-size:14px;font-weight:600}
+.toplinks a:hover{color:var(--blue)}
+.container{max-width:1050px;margin:25px auto;padding:0 16px}
+.heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.heading h1{font-size:25px}
+.heading p{color:var(--muted);font-size:13px;margin-top:5px}
+.card{background:white;border-radius:14px;padding:20px;margin-bottom:17px;box-shadow:0 1px 4px #ddd}
+.section-title{font-size:18px;margin-bottom:16px}
+.search-form{display:flex;gap:9px;margin-bottom:18px}
+.search-form input{flex:1;min-width:0;padding:13px 16px;border:1px solid var(--line);border-radius:25px;background:var(--bg);outline:none;font-size:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border-radius:22px;background:var(--blue);color:white;font-weight:700;font-size:13px}
+.btn:hover{filter:brightness(.94)}
+.btn.secondary{background:#eaf2ff;color:var(--blue)}
+.btn.danger{background:#fff0f0;color:#d93025}
+.user-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.user{border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;align-items:center;gap:12px;min-width:0}
+.avatar{width:49px;height:49px;flex-shrink:0;border-radius:50%;background:linear-gradient(135deg,#1877f2,#7658e8);display:grid;place-items:center;color:white;font-size:20px;font-weight:bold;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.info{flex:1;min-width:0}
+.info strong{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info small{display:block;color:var(--muted);font-size:12px;margin-top:5px}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.actions .btn{padding:8px 12px;font-size:12px}
+.request{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.request:last-child{border-bottom:0}
+.empty{text-align:center;color:var(--muted);padding:22px;font-size:14px}
+.pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:20px;font-size:13px}
+.flash{padding:12px 15px;background:#eaf2ff;border-radius:9px;margin-bottom:12px;font-size:13px}
+@media(max-width:650px){
+.topbar{height:56px;padding:0 13px}.brand{font-size:21px}.toplinks{gap:11px;font-size:12px}
+.container{margin:16px auto;padding:0 10px}
+.card{padding:14px}
+.heading h1{font-size:21px}
+.user-list{grid-template-columns:1fr}
+.user{padding:11px}
+.btn{padding:9px 12px}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="/">NET BOOK</a>
+<nav class="toplinks">
+<a href="/">🏠 Home</a>
+<a href="/profile">👤 Profile</a>
+<a href="{{ url_for('friends') }}">👥 Friends</a>
+<a href="{{ url_for('language_settings') }}">🌐 Language</a>
+</nav>
+</header>
+
+<main class="container">
+<div class="heading">
+<div>
+<h1>👥 Friends</h1>
+<p>Find people, send requests and connect with each other.</p>
+</div>
+<a class="btn secondary" href="/">← Home</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="flash">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<section class="card">
+<h2 class="section-title">📨 Friend Requests</h2>
+{% if incoming_requests %}
+{% for item in incoming_requests %}
+{% set sender = incoming_senders.get(item.id) %}
+{% if sender %}
+<div class="request">
+<div class="avatar">
+{% if sender.profile_picture %}
+<img src="{{ sender.profile_picture }}" alt="">
+{% else %}{{ sender.full_name[:1] }}{% endif %}
+</div>
+<div class="info">
+<strong>{{ sender.full_name }}</strong>
+<small>@{{ sender.username }}</small>
+<div class="actions">
+<a class="btn secondary" href="{{ url_for('public_profile', username=sender.username) }}">View Profile</a>
+<form method="POST" action="{{ url_for('accept_friend_request', request_id=item.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="btn" type="submit">Accept</button>
+</form>
+<form method="POST" action="{{ url_for('reject_friend_request', request_id=item.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="btn danger" type="submit">Reject</button>
+</form>
+</div>
+</div>
+</div>
+{% endif %}
+{% endfor %}
+{% else %}
+<div class="empty">এখনো কোনো Friend Request আসেনি।</div>
+{% endif %}
+</section>
+
+<section class="card">
+<h2 class="section-title">🔎 Find Friends</h2>
+<form class="search-form" method="GET" action="{{ url_for('friends') }}">
+<input type="search" name="q" value="{{ search }}" placeholder="Search by name or username...">
+<button class="btn" type="submit">Search</button>
+</form>
+
+{% if users %}
+<div class="user-list">
+{% for person in users %}
+<div class="user">
+<div class="avatar">
+{% if person.profile_picture %}
+<img src="{{ person.profile_picture }}" alt="">
+{% else %}{{ person.full_name[:1] }}{% endif %}
+</div>
+<div class="info">
+<strong>{{ person.full_name }}</strong>
+<small>@{{ person.username }}</small>
+<div class="actions">
+<a class="btn secondary" href="{{ url_for('public_profile', username=person.username) }}">Profile</a>
+
+{% if person.id in friend_ids %}
+<span class="btn secondary">✓ Friends</span>
+{% elif person.id in outgoing_ids %}
+<span class="btn secondary">Request Sent</span>
+<form method="POST" action="{{ url_for('cancel_friend_request', request_id=outgoing_requests_map[person.id]) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="btn secondary" type="submit">Cancel Request</button>
+</form>
+{% elif person.id in incoming_ids %}
+<span class="btn secondary">Request Received</span>
+{% else %}
+<form method="POST" action="{{ url_for('send_friend_request', user_id=person.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="btn" type="submit">＋ Add Friend</button>
+</form>
+{% endif %}
+</div>
+</div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="empty">কোনো ব্যবহারকারী পাওয়া যায়নি।</div>
+{% endif %}
+
+{% if users_page.pages > 1 %}
+<div class="pagination">
+{% if users_page.has_prev %}
+<a class="btn secondary" href="{{ url_for('friends', page=users_page.prev_num, q=search) }}">← Previous</a>
+{% endif %}
+<span>Page {{ users_page.page }} of {{ users_page.pages }}</span>
+{% if users_page.has_next %}
+<a class="btn secondary" href="{{ url_for('friends', page=users_page.next_num, q=search) }}">Next →</a>
+{% endif %}
+</div>
+{% endif %}
+</section>
+</main>
+</body>
+</html>
