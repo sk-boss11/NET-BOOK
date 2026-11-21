@@ -11,6 +11,7 @@ from social_models import register_social_models
 from sqlalchemy import or_
 from translations import LANGUAGES, RTL_LANGUAGES, translate, home_translate
 import os
+import json
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -91,6 +92,26 @@ class Message(db.Model):
 
 
 
+
+
+class Call(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    caller_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    receiver_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    call_type = db.Column(db.String(10), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="ringing")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    answered_at = db.Column(db.DateTime, nullable=True)
+    ended_at = db.Column(db.DateTime, nullable=True)
+
+
+class CallSignal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    call_id = db.Column(db.Integer, db.ForeignKey("call.id"), nullable=False, index=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    signal_type = db.Column(db.String(20), nullable=False)
+    payload = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
 class VerificationOTP(db.Model):
@@ -709,6 +730,160 @@ def chat(user_id):
         friend=friend,
         chat_messages=chat_messages
     )
+
+
+
+
+def _get_call_for_user(call_id):
+    call = db.session.get(Call, call_id)
+    if not call or current_user.id not in (call.caller_id, call.receiver_id):
+        return None
+    return call
+
+
+def _are_call_friends(user_id):
+    return FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            db.and_(FriendRequest.sender_id == current_user.id,
+                    FriendRequest.receiver_id == user_id),
+            db.and_(FriendRequest.sender_id == user_id,
+                    FriendRequest.receiver_id == current_user.id)
+        )
+    ).first() is not None
+
+
+@app.route("/calls/start", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute")
+def start_call():
+    data = request.get_json(silent=True) or {}
+    try:
+        receiver_id = int(data.get("receiver_id", 0))
+    except (TypeError, ValueError):
+        return {"error": "Invalid receiver."}, 400
+
+    call_type = data.get("call_type")
+    receiver = db.session.get(User, receiver_id)
+
+    if call_type not in ("voice", "video"):
+        return {"error": "Invalid call type."}, 400
+    if not receiver or not receiver.is_active or receiver.id == current_user.id:
+        return {"error": "User not found."}, 404
+    if not _are_call_friends(receiver.id):
+        return {"error": "Calls are allowed only between accepted friends."}, 403
+
+    call = Call(caller_id=current_user.id, receiver_id=receiver.id,
+                call_type=call_type, status="ringing")
+    db.session.add(call)
+    db.session.commit()
+    return {"call_id": call.id, "status": call.status, "call_type": call.call_type}, 201
+
+
+@app.route("/calls/pending")
+@login_required
+def pending_calls():
+    calls = Call.query.filter_by(
+        receiver_id=current_user.id, status="ringing"
+    ).order_by(Call.created_at.desc()).limit(10).all()
+
+    return {"calls": [{
+        "call_id": c.id,
+        "caller_id": c.caller_id,
+        "caller_name": db.session.get(User, c.caller_id).full_name,
+        "call_type": c.call_type
+    } for c in calls if db.session.get(User, c.caller_id)]}
+
+
+@app.route("/calls/<int:call_id>/respond", methods=["POST"])
+@login_required
+def respond_call(call_id):
+    call = _get_call_for_user(call_id)
+    if not call:
+        return {"error": "Call not found."}, 404
+    if current_user.id != call.receiver_id or call.status != "ringing":
+        return {"error": "Call cannot be answered."}, 403
+
+    action = (request.get_json(silent=True) or {}).get("action")
+    if action == "accept":
+        call.status = "accepted"
+        call.answered_at = datetime.utcnow()
+    elif action == "reject":
+        call.status = "rejected"
+        call.ended_at = datetime.utcnow()
+    else:
+        return {"error": "Invalid action."}, 400
+
+    db.session.commit()
+    return {"call_id": call.id, "status": call.status}
+
+
+@app.route("/calls/<int:call_id>/end", methods=["POST"])
+@login_required
+def end_call(call_id):
+    call = _get_call_for_user(call_id)
+    if not call:
+        return {"error": "Call not found."}, 404
+    if call.status not in ("ringing", "accepted"):
+        return {"call_id": call.id, "status": call.status}
+
+    call.status = "ended"
+    call.ended_at = datetime.utcnow()
+    db.session.commit()
+    return {"call_id": call.id, "status": call.status}
+
+
+@app.route("/calls/<int:call_id>/state")
+@login_required
+def call_state(call_id):
+    call = _get_call_for_user(call_id)
+    if not call:
+        return {"error": "Call not found."}, 404
+    return {"call_id": call.id, "status": call.status,
+            "call_type": call.call_type, "caller_id": call.caller_id,
+            "receiver_id": call.receiver_id}
+
+
+@app.route("/calls/<int:call_id>/signals", methods=["GET", "POST"])
+@login_required
+def call_signals(call_id):
+    call = _get_call_for_user(call_id)
+    if not call:
+        return {"error": "Call not found."}, 404
+    if call.status not in ("ringing", "accepted"):
+        return {"error": "Call is not active."}, 409
+
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        signal_type = data.get("signal_type")
+        payload = data.get("payload")
+        if signal_type not in ("offer", "answer", "candidate") or payload is None:
+            return {"error": "Invalid signaling data."}, 400
+        serialized = json.dumps(payload)
+        if len(serialized) > 200000:
+            return {"error": "Signaling data too large."}, 413
+
+        signal = CallSignal(call_id=call.id, sender_id=current_user.id,
+                            signal_type=signal_type, payload=serialized)
+        db.session.add(signal)
+        db.session.commit()
+        return {"signal_id": signal.id}, 201
+
+    try:
+        after_id = max(0, int(request.args.get("after", 0)))
+    except ValueError:
+        after_id = 0
+
+    signals = CallSignal.query.filter(
+        CallSignal.call_id == call.id,
+        CallSignal.sender_id != current_user.id,
+        CallSignal.id > after_id
+    ).order_by(CallSignal.id.asc()).limit(100).all()
+
+    return {"signals": [{
+        "id": item.id, "signal_type": item.signal_type,
+        "payload": json.loads(item.payload)
+    } for item in signals]}
 
 
 @app.route("/friends")

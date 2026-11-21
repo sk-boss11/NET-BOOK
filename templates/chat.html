@@ -18,6 +18,11 @@ a{text-decoration:none;color:inherit}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .person strong{font-size:15px;display:block}
 .person small{font-size:12px;color:#888}
+.call-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.call-btn{border:0;border-radius:20px;padding:10px 13px;font-size:13px;font-weight:bold;cursor:pointer}
+.voice-btn{background:#e8f5e9;color:#16833b}
+.video-btn{background:#eaf2ff;color:#1877f2}
+@media(max-width:600px){.call-actions{gap:5px}.call-btn{padding:9px 10px;font-size:11px}}
 .messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:11px;background:#f8faff}
 .message{max-width:75%;padding:11px 14px;border-radius:15px;font-size:14px;line-height:1.65;overflow-wrap:anywhere}
 .mine{align-self:flex-end;background:#1877f2;color:#fff;border-bottom-right-radius:4px}
@@ -28,6 +33,34 @@ a{text-decoration:none;color:inherit}
 .composer textarea{flex:1;resize:none;border:0;outline:none;background:#f0f2f5;border-radius:22px;padding:12px 16px;font:14px Arial,"Noto Sans Bengali",sans-serif;max-height:100px}
 .send{background:#1877f2;color:white;border:0;border-radius:22px;padding:0 22px;font-weight:bold;cursor:pointer}
 @media(max-width:600px){.topbar{height:55px;padding:0 12px}.brand{font-size:21px}.chat-box{margin:0;height:calc(100dvh - 55px);border-radius:0}.message{max-width:85%}}
+
+#incoming-call,#active-call{
+  position:fixed;inset:0;z-index:9999;background:rgba(10,18,35,.88);
+  display:flex;align-items:center;justify-content:center;padding:16px
+}
+#incoming-call[hidden],#active-call[hidden]{display:none!important}
+.call-panel,.active-call-panel{
+  width:min(100%,520px);background:#fff;border-radius:20px;
+  padding:28px;text-align:center;box-shadow:0 15px 50px #0005
+}
+.call-panel h2,.active-call-panel h2{margin-bottom:14px;color:#1877f2}
+.call-panel p,.active-call-panel p{margin:10px 0;color:#555}
+.call-panel-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:22px}
+.call-panel-actions button{
+  border:0;border-radius:24px;padding:12px 20px;font-weight:bold;
+  cursor:pointer;background:#eaf2ff;color:#1877f2
+}
+#accept-call{background:#16833b;color:white}
+#reject-call,#end-call{background:#e53935;color:white}
+.video-area{position:relative;background:#111;border-radius:14px;overflow:hidden;min-height:220px}
+#remote-video{width:100%;max-height:65vh;display:block;object-fit:contain}
+#local-video{position:absolute;right:12px;bottom:12px;width:26%;max-height:150px;
+  border:2px solid white;border-radius:10px;background:#333;object-fit:cover}
+@media(max-width:600px){
+  .call-panel,.active-call-panel{padding:22px 16px}
+  .video-area{min-height:180px}
+}
+
 </style>
 </head>
 <body>
@@ -35,7 +68,9 @@ a{text-decoration:none;color:inherit}
 <a class="brand" href="/">NET BOOK</a>
 <a class="back" href="{{ url_for('messages') }}">← Messages</a>
 </header>
-<main class="chat-box">
+<main class="chat-box"
+      data-friend-id="{{ friend.id }}"
+      data-csrf-token="{{ csrf_token() }}">
 <div class="chat-head">
 <div class="avatar">
 {% if friend.profile_picture %}
@@ -47,6 +82,10 @@ a{text-decoration:none;color:inherit}
 <div class="person">
 <strong>{{ friend.full_name }}</strong>
 <small>@{{ friend.username }}</small>
+</div>
+<div class="call-actions">
+<button class="call-btn voice-btn" type="button" onclick="startCall('voice')">📞 Voice</button>
+<button class="call-btn video-btn" type="button" onclick="startCall('video')">📹 Video</button>
 </div>
 </div>
 <div class="messages" id="messages">
@@ -68,9 +107,319 @@ a{text-decoration:none;color:inherit}
 <button class="send" type="submit">Send ➤</button>
 </form>
 </main>
+
+<section id="incoming-call" hidden role="dialog" aria-modal="true" aria-label="Incoming call">
+  <div class="call-panel">
+    <h2>Incoming Call</h2>
+    <p id="incoming-caller">কেউ আপনাকে কল করছেন</p>
+    <p id="incoming-type"></p>
+    <div class="call-panel-actions">
+      <button type="button" id="accept-call">Accept</button>
+      <button type="button" id="reject-call">Reject</button>
+    </div>
+  </div>
+</section>
+
+<section id="active-call" hidden role="dialog" aria-modal="true" aria-label="Active call">
+  <div class="active-call-panel">
+    <h2 id="call-title">NET BOOK Call</h2>
+    <p id="call-status">Connecting...</p>
+    <div class="video-area">
+      <video id="remote-video" autoplay playsinline></video>
+      <video id="local-video" autoplay playsinline muted></video>
+    </div>
+    <div class="call-panel-actions">
+      <button type="button" id="mute-call">Mute</button>
+      <button type="button" id="camera-call">Camera Off</button>
+      <button type="button" id="end-call">End Call</button>
+    </div>
+  </div>
+</section>
+
 <script>
-const box=document.getElementById("messages");
-box.scrollTop=box.scrollHeight;
+const box = document.getElementById("messages");
+if (box) box.scrollTop = box.scrollHeight;
+
+const chatBox = document.querySelector(".chat-box");
+const friendId = Number(chatBox.dataset.friendId);
+const csrfToken = chatBox.dataset.csrfToken;
+
+let activeCallId = null;
+let activeCallType = null;
+let peer = null;
+let localStream = null;
+let remoteStream = null;
+let signalCursor = 0;
+let signalTimer = null;
+let stateTimer = null;
+let incomingTimer = null;
+let remoteDescriptionReady = false;
+let queuedCandidates = [];
+let callStarted = false;
+let ending = false;
+
+const incomingPanel = document.getElementById("incoming-call");
+const activePanel = document.getElementById("active-call");
+const incomingCaller = document.getElementById("incoming-caller");
+const incomingType = document.getElementById("incoming-type");
+const callStatus = document.getElementById("call-status");
+const callTitle = document.getElementById("call-title");
+const localVideo = document.getElementById("local-video");
+const remoteVideo = document.getElementById("remote-video");
+
+async function api(url, method = "GET", body = null) {
+    const options = { method, headers: {} };
+    if (body !== null) {
+        options.headers["Content-Type"] = "application/json";
+        options.headers["X-CSRFToken"] = csrfToken;
+        options.body = JSON.stringify(body);
+    }
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Request failed");
+    return data;
+}
+
+function showActive(type, name) {
+    activePanel.hidden = false;
+    incomingPanel.hidden = true;
+    callTitle.textContent = (type === "video" ? "📹 Video Call" : "📞 Voice Call") + (name ? " — " + name : "");
+    callStatus.textContent = "Connecting...";
+    localVideo.hidden = type !== "video";
+    remoteVideo.hidden = type !== "video";
+}
+
+async function sendSignal(type, payload) {
+    await api(`/calls/${activeCallId}/signals`, "POST", {
+        signal_type: type,
+        payload
+    });
+}
+
+async function setupPeer(offerer) {
+    if (peer) return;
+    callStarted = true;
+    callStatus.textContent = "Requesting microphone/camera permission...";
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: activeCallType === "video"
+        });
+    } catch (err) {
+        throw new Error("মাইক্রোফোন/ক্যামেরা অনুমতি পাওয়া যায়নি: " + err.message);
+    }
+
+    if (activeCallType === "video") localVideo.srcObject = localStream;
+
+    peer = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    remoteStream = new MediaStream();
+    remoteVideo.srcObject = remoteStream;
+
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+    peer.ontrack = event => {
+        event.streams[0].getTracks().forEach(track => {
+            if (!remoteStream.getTracks().some(t => t.id === track.id)) {
+                remoteStream.addTrack(track);
+            }
+        });
+        remoteVideo.play().catch(() => {});
+        callStatus.textContent = "Connected";
+    };
+
+    peer.onicecandidate = event => {
+        if (event.candidate && activeCallId) {
+            sendSignal("candidate", event.candidate.toJSON()).catch(console.error);
+        }
+    };
+
+    peer.onconnectionstatechange = () => {
+        if (!peer) return;
+        if (peer.connectionState === "connected") callStatus.textContent = "Connected";
+        if (["failed", "disconnected"].includes(peer.connectionState)) {
+            callStatus.textContent = "Connection interrupted";
+        }
+    };
+
+    if (offerer) {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        await sendSignal("offer", offer);
+        callStatus.textContent = "Calling...";
+    }
+}
+
+async function processSignals() {
+    if (!activeCallId || !peer) return;
+    try {
+        const data = await api(`/calls/${activeCallId}/signals?after=${signalCursor}`);
+        for (const signal of data.signals || []) {
+            signalCursor = Math.max(signalCursor, signal.id);
+            if (signal.signal_type === "offer" && !peer.remoteDescription) {
+                await peer.setRemoteDescription(new RTCSessionDescription(signal.payload));
+                remoteDescriptionReady = true;
+                for (const candidate of queuedCandidates) await peer.addIceCandidate(candidate);
+                queuedCandidates = [];
+                const answer = await peer.createAnswer();
+                await peer.setLocalDescription(answer);
+                await sendSignal("answer", answer);
+                callStatus.textContent = "Connecting...";
+            } else if (signal.signal_type === "answer" && !peer.remoteDescription) {
+                await peer.setRemoteDescription(new RTCSessionDescription(signal.payload));
+                remoteDescriptionReady = true;
+                for (const candidate of queuedCandidates) await peer.addIceCandidate(candidate);
+                queuedCandidates = [];
+            } else if (signal.signal_type === "candidate") {
+                const candidate = new RTCIceCandidate(signal.payload);
+                if (remoteDescriptionReady) await peer.addIceCandidate(candidate);
+                else queuedCandidates.push(candidate);
+            }
+        }
+    } catch (err) {
+        console.error("Signal polling:", err);
+    }
+}
+
+function startPolling() {
+    clearInterval(signalTimer);
+    clearInterval(stateTimer);
+    signalTimer = setInterval(processSignals, 800);
+    stateTimer = setInterval(checkCallState, 1500);
+}
+
+async function checkCallState() {
+    if (!activeCallId || ending) return;
+    try {
+        const data = await api(`/calls/${activeCallId}/state`);
+        if (data.status === "accepted" && !callStarted) {
+            await setupPeer(data.caller_id === Number("{{ current_user.id }}"));
+            startPolling();
+        } else if (["rejected", "ended"].includes(data.status)) {
+            callStatus.textContent = data.status === "rejected" ? "Call rejected" : "Call ended";
+            cleanupCall();
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function startCall(callType) {
+    const button = document.querySelector(callType === "voice" ? ".voice-btn" : ".video-btn");
+    if (activeCallId) return alert("আপনার একটি কল চলছে।");
+    button.disabled = true;
+    try {
+        const data = await api("/calls/start", "POST", {
+            receiver_id: friendId,
+            call_type: callType
+        });
+        activeCallId = data.call_id;
+        activeCallType = callType;
+        signalCursor = 0;
+        showActive(callType, "কল করা হচ্ছে");
+        startPolling();
+    } catch (err) {
+        alert(err.message);
+    } finally {
+        button.disabled = false;
+    }
+}
+
+async function checkIncomingCalls() {
+    if (activeCallId || !incomingPanel.hidden) return;
+    try {
+        const data = await api("/calls/pending");
+        const call = (data.calls || []).find(c => Number(c.caller_id) === friendId);
+        if (!call) return;
+        activeCallId = call.call_id;
+        activeCallType = call.call_type;
+        signalCursor = 0;
+        incomingCaller.textContent = call.caller_name + " আপনাকে কল করছেন";
+        incomingType.textContent = call.call_type === "video" ? "ভিডিও কল" : "ভয়েস কল";
+        incomingPanel.hidden = false;
+    } catch (err) {
+        console.error("Incoming call check:", err);
+    }
+}
+
+async function answerCall(action) {
+    if (!activeCallId) return;
+    try {
+        await api(`/calls/${activeCallId}/respond`, "POST", { action });
+        if (action === "reject") {
+            cleanupCall();
+            return;
+        }
+        showActive(activeCallType, "Incoming call");
+        await setupPeer(false);
+        startPolling();
+    } catch (err) {
+        alert(err.message);
+        cleanupCall();
+    }
+}
+
+async function endCall() {
+    if (!activeCallId) return;
+    ending = true;
+    const id = activeCallId;
+    try {
+        await api(`/calls/${id}/end`, "POST", {});
+    } catch (err) {
+        console.error(err);
+    }
+    cleanupCall();
+}
+
+function cleanupCall() {
+    clearInterval(signalTimer);
+    clearInterval(stateTimer);
+    if (peer) {
+        peer.ontrack = null;
+        peer.onicecandidate = null;
+        peer.close();
+    }
+    if (localStream) localStream.getTracks().forEach(track => track.stop());
+    if (remoteStream) remoteStream.getTracks().forEach(track => track.stop());
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    peer = null;
+    localStream = null;
+    remoteStream = null;
+    activeCallId = null;
+    activeCallType = null;
+    signalCursor = 0;
+    callStarted = false;
+    remoteDescriptionReady = false;
+    queuedCandidates = [];
+    ending = false;
+    incomingPanel.hidden = true;
+    activePanel.hidden = true;
+}
+
+document.getElementById("accept-call")?.addEventListener("click", () => answerCall("accept"));
+document.getElementById("reject-call")?.addEventListener("click", () => answerCall("reject"));
+document.getElementById("end-call")?.addEventListener("click", endCall);
+
+document.getElementById("mute-call")?.addEventListener("click", event => {
+    if (!localStream) return;
+    const tracks = localStream.getAudioTracks();
+    tracks.forEach(track => track.enabled = !track.enabled);
+    event.currentTarget.textContent = tracks.some(track => track.enabled) ? "Mute" : "Unmute";
+});
+
+document.getElementById("camera-call")?.addEventListener("click", event => {
+    if (!localStream) return;
+    const tracks = localStream.getVideoTracks();
+    if (!tracks.length) return alert("এটি Voice Call।");
+    tracks.forEach(track => track.enabled = !track.enabled);
+    event.currentTarget.textContent = tracks.some(track => track.enabled) ? "Camera Off" : "Camera On";
+});
+
+incomingTimer = setInterval(checkIncomingCalls, 2500);
+checkIncomingCalls();
 </script>
 </body>
 </html>

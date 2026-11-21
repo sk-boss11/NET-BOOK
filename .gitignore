@@ -11,3 +11,5 @@ backups/
 *.before-*
 .venv/
 venv/
+
+tmp/
